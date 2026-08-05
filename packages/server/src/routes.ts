@@ -132,7 +132,9 @@ function makeRoutes<AuthError, AuthServices>(
     Layer.flatMap((context) => {
       const services = Layer.succeedContext(context)
       const requestServices = Layer.merge(
-        Layer.succeedContext(Context.pick(PermissionSaved.Service, Project.Service, WellKnown.Service)(context)),
+        Layer.succeedContext(
+          Context.pick(Database.Service, PermissionSaved.Service, Project.Service, WellKnown.Service)(context),
+        ),
         ServerInfo.layer(serviceURLs, options.app),
       )
       return HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
