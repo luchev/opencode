@@ -31,6 +31,19 @@ export function NewSessionView(props: {
   project: PromptProjectController
   workspace: NewSessionWorkspaceController
 }) {
+  const language = useLanguage()
+  const [onboarding, setOnboarding, , onboardingReady] = persisted(
+    Persist.global("workspace-onboarding"),
+    createStore({ cardDismissed: false, used: false }),
+  )
+  const showCard = createMemo(
+    () => onboardingReady() && props.workspace.bar.visible() && !onboarding.cardDismissed && !onboarding.used,
+  )
+  const select = (value: string) => {
+    props.workspace.selection.set(value)
+    setOnboarding("used", true)
+  }
+
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
       <div
@@ -59,8 +72,10 @@ export function NewSessionView(props: {
                       projectRoot={props.workspace.project.root()}
                       workspaces={props.workspace.project.workspaces()}
                       branch={props.workspace.bar.branch()}
-                      onChange={props.workspace.selection.set}
+                      onboarding={onboarding.cardDismissed && !onboarding.used}
+                      onChange={select}
                       onDone={props.input.restoreFocus}
+                      onViewAll={props.workspace.project.openAll}
                     />
                   </Show>
                 </div>
@@ -68,6 +83,27 @@ export function NewSessionView(props: {
             </div>
           </div>
         </div>
+        <Show when={showCard()}>
+          <div class="absolute inset-x-0 bottom-[calc(25%-81px)] flex justify-center px-6 pointer-events-none">
+            <div class="pointer-events-auto flex w-[280px] flex-col gap-2 rounded-lg bg-v2-background-bg-base p-3 shadow-[var(--v2-elevation-floating)]">
+              <div class="flex items-start gap-2 text-[13px] font-[530] leading-4 tracking-[-0.04px] text-v2-text-text-muted">
+                <IconV2 name="workspace-isolated" class="shrink-0" />
+                <span class="min-w-0 flex-1">{language.t("workspace.onboarding.title")}</span>
+                <button
+                  type="button"
+                  class="flex size-5 shrink-0 items-center justify-center rounded-[4px] text-v2-icon-icon-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-icon-icon-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:outline-none"
+                  aria-label={language.t("common.dismiss")}
+                  onClick={() => setOnboarding("cardDismissed", true)}
+                >
+                  <IconV2 name="xmark-small" />
+                </button>
+              </div>
+              <p class="text-[13px] font-[440] leading-4 tracking-[-0.04px] text-v2-text-text-muted">
+                {language.t("workspace.onboarding.description")}
+              </p>
+            </div>
+          </div>
+        </Show>
         <ProviderTip />
       </div>
     </div>

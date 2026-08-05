@@ -168,6 +168,38 @@ describe("current session timeline rows", () => {
     ])
   })
 
+  test("appends lifecycle extensions after current turns", () => {
+    const source = [
+      { id: "msg_user", type: "user", text: "question", time: { created: 1 } },
+    ] satisfies SessionMessageInfo[]
+    const normalized = normalizeSessionMessages("ses_1", source)
+    const messages = new Map(normalized.messages.map((message) => [message.id, message]))
+
+    const result = Timeline.constructSessionMessageRows(
+      source,
+      (messageID) => messages.get(messageID),
+      (messageID) => normalized.parts.get(messageID) ?? [],
+      true,
+      "idle",
+      true,
+      normalized.messages.filter((message) => message.role === "user"),
+      (message) => [
+        new TimelineRow.WorkspaceLifecycle({
+          userMessageID: message.id,
+          notice: {
+            type: "operation",
+            operation: { type: "move", status: "complete", directory: "/workspace", messageID: message.id },
+          },
+        }),
+      ],
+    )
+
+    expect(result.rows.map(TimelineRow.key)).toEqual([
+      "user-message:msg_user",
+      "workspace-lifecycle:msg_user:operation",
+    ])
+  })
+
   test("removes a failed assistant error when the turn continues streaming", () => {
     const source = [
       { id: "msg_user", type: "user", text: "recover", time: { created: 1 } },

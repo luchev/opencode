@@ -208,6 +208,57 @@ describe("applyDirectoryEvent", () => {
     expect(store.sessionTotal).toBe(2)
   })
 
+  test("moves a root between loaded directory indexes exactly once", () => {
+    const info = { ...rootSession({ id: "session" }), directory: "/destination" }
+    const [source, setSource] = createStore(
+      baseState({ session: [{ ...info, directory: "/source" }], sessionTotal: 1 }),
+    )
+    const [destination, setDestination] = createStore(baseState({ session: [], sessionTotal: 0 }))
+    const created = { type: "session.created", properties: { info } }
+    const moved = {
+      type: "session.moved",
+      properties: { sessionID: info.id, location: { directory: info.directory } },
+    }
+
+    applyDirectoryEvent({
+      event: created,
+      store: destination,
+      setStore: setDestination,
+      push() {},
+      directory: "/destination",
+      loadLsp() {},
+    })
+    applyDirectoryEvent({
+      event: moved,
+      store: source,
+      setStore: setSource,
+      push() {},
+      directory: "/source",
+      loadLsp() {},
+    })
+    applyDirectoryEvent({
+      event: created,
+      store: destination,
+      setStore: setDestination,
+      push() {},
+      directory: "/destination",
+      loadLsp() {},
+    })
+    applyDirectoryEvent({
+      event: moved,
+      store: source,
+      setStore: setSource,
+      push() {},
+      directory: "/source",
+      loadLsp() {},
+    })
+
+    expect(source.session).toEqual([])
+    expect(source.sessionTotal).toBe(0)
+    expect(destination.session.map((session) => session.id)).toEqual([info.id])
+    expect(destination.sessionTotal).toBe(1)
+  })
+
   test("cleans session caches when archived", () => {
     const message = userMessage("msg_1", "ses_1")
     const [store, setStore] = createStore(

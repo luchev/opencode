@@ -3,6 +3,10 @@ import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { persisted } from "@/utils/persist"
 import { usePlatform } from "@/context/platform"
+import { ScopedKey, type ServerScope } from "@/utils/server-scope"
+
+export type WorkspaceDefaultDestination = "last-used" | "local" | "new"
+export type WorkspaceLastUsed = "local" | "workspace"
 
 export interface NotificationSettings {
   agent: boolean
@@ -49,6 +53,10 @@ export interface Settings {
   keybinds: Record<string, string>
   permissions: {
     autoApprove: boolean
+  }
+  workspaces: {
+    defaultDestination: WorkspaceDefaultDestination
+    lastUsed: Record<string, WorkspaceLastUsed>
   }
   notifications: NotificationSettings
   sounds: SoundSettings
@@ -205,6 +213,10 @@ const defaultSettings: Settings = {
   keybinds: {},
   permissions: {
     autoApprove: false,
+  },
+  workspaces: {
+    defaultDestination: "last-used",
+    lastUsed: {},
   },
   notifications: {
     agent: true,
@@ -497,6 +509,29 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         autoApprove: withFallback(() => store.permissions?.autoApprove, defaultSettings.permissions.autoApprove),
         setAutoApprove(value: boolean) {
           setStore("permissions", "autoApprove", value)
+        },
+      },
+      workspaces: {
+        defaultDestination: withFallback(
+          () => store.workspaces?.defaultDestination,
+          defaultSettings.workspaces.defaultDestination,
+        ),
+        setDefaultDestination(value: WorkspaceDefaultDestination) {
+          setStore("workspaces", (current) => ({
+            ...defaultSettings.workspaces,
+            ...current,
+            defaultDestination: value,
+          }))
+        },
+        lastUsed(scope: ServerScope, projectID: string) {
+          return store.workspaces?.lastUsed?.[ScopedKey.from(scope, projectID)]
+        },
+        setLastUsed(scope: ServerScope, projectID: string, value: WorkspaceLastUsed) {
+          setStore("workspaces", (current) => ({
+            ...defaultSettings.workspaces,
+            ...current,
+            lastUsed: { ...current?.lastUsed, [ScopedKey.from(scope, projectID)]: value },
+          }))
         },
       },
       notifications: {

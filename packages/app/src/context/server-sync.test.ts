@@ -1,18 +1,27 @@
 import { describe, expect, test } from "bun:test"
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
+import type { Event, OpencodeClient, Session } from "@opencode-ai/sdk/v2/client"
 import type {
   McpListInput,
   McpResourceCatalogInput,
   SessionApi,
   SessionInfo,
   SessionListInput,
+  OpenCodeEvent,
 } from "@opencode-ai/client/promise"
 import { QueryClient } from "@tanstack/solid-query"
 import { canDisposeDirectory, pickDirectoriesToEvict } from "./global-sync/eviction"
 import { estimateRootSessionTotal, loadRootSessions } from "./global-sync/session-load"
-import { loadActiveSessionsQuery, loadMcpQuery, loadMcpResourcesQuery, seedActiveSessionStatuses } from "./server-sync"
+import {
+  captureSessionMove,
+  loadActiveSessionsQuery,
+  loadMcpQuery,
+  loadMcpResourcesQuery,
+  seedActiveSessionStatuses,
+  shouldRefreshWorkspaceSessions,
+} from "./server-sync"
 import { ServerScope } from "@/utils/server-scope"
 import { createServerSession } from "./server-session"
+import { adaptServerEvent } from "./server-sdk"
 import type { ServerApi } from "@/utils/server"
 
 type McpApi = ServerApi["mcp"]
@@ -102,6 +111,87 @@ describe("active session query", () => {
   })
 })
 
+describe("session move normalization", () => {
+  test("captures and applies current moves from the source placement", () => {
+    const session = createServerSession({} as OpencodeClient)
+    session.remember(sessionAt("/source"))
+    const current = {
+      id: "event-current-move",
+      created: 10,
+      type: "session.moved",
+      data: { sessionID: "session", location: { directory: "/destination" } },
+    } as OpenCodeEvent
+    const event = adaptServerEvent(current)
+
+    expect(captureSessionMove(event, session.get)).toEqual({
+      sessionID: "session",
+      from: "/source",
+      refresh: "session.next.moved",
+    })
+    session.applyV2(current)
+    session.apply(event)
+    expect(session.get("session")?.directory).toBe("/destination")
+  })
+
+  test("captures and applies V1 moves from the source placement", () => {
+    const session = createServerSession({} as OpencodeClient)
+    session.remember(sessionAt("/source"))
+    const event = {
+      type: "session.next.moved",
+      properties: {
+        timestamp: 10,
+        sessionID: "session",
+        location: { directory: "/destination" },
+        subdirectory: "packages/app",
+      },
+    } as Event
+
+    expect(captureSessionMove(event, session.get)).toEqual({
+      sessionID: "session",
+      from: "/source",
+      refresh: "session.next.moved",
+    })
+    session.apply(event)
+    expect(session.get("session")).toMatchObject({ directory: "/destination", path: "packages/app" })
+  })
+
+  test("refreshes workspace inventory for current and V1 lifecycle events", () => {
+    const current = adaptServerEvent({
+      id: "event-current-move-refresh",
+      created: 10,
+      type: "session.moved",
+      data: { sessionID: "session", location: { directory: "/destination" } },
+    } as OpenCodeEvent)
+    const legacy = {
+      type: "session.next.moved",
+      properties: { timestamp: 10, sessionID: "session", location: { directory: "/destination" } },
+    } as Event
+
+    expect(shouldRefreshWorkspaceSessions(current)).toBe(true)
+    expect(
+      shouldRefreshWorkspaceSessions(
+        adaptServerEvent({
+          id: "event-current-rename-refresh",
+          created: 10,
+          type: "session.renamed",
+          data: { sessionID: "session", title: "Renamed" },
+        } as OpenCodeEvent),
+      ),
+    ).toBe(true)
+    expect(shouldRefreshWorkspaceSessions(legacy)).toBe(true)
+    expect(
+      shouldRefreshWorkspaceSessions({ type: "session.created", properties: { info: sessionAt("/source") } } as Event),
+    ).toBe(true)
+    expect(
+      shouldRefreshWorkspaceSessions({ type: "session.updated", properties: { info: sessionAt("/source") } } as Event),
+    ).toBe(true)
+    expect(
+      shouldRefreshWorkspaceSessions({ type: "session.deleted", properties: { info: sessionAt("/source") } } as Event),
+    ).toBe(true)
+    expect(shouldRefreshWorkspaceSessions({ type: "server.connected", properties: {} } as Event)).toBe(false)
+  })
+})
+
 describe("pickDirectoriesToEvict", () => {
   test("keeps pinned stores and evicts idle stores", () => {
     const now = 5_000
@@ -172,6 +262,18 @@ function sessionInfo(id: string) {
     title: id,
     location: { directory: "dir" },
   } as SessionInfo
+}
+
+function sessionAt(directory: string): Session {
+  return {
+    id: "session",
+    slug: "session",
+    projectID: "project",
+    directory,
+    title: "Session",
+    version: "",
+    time: { created: 1, updated: 1 },
+  }
 }
 
 describe("estimateRootSessionTotal", () => {

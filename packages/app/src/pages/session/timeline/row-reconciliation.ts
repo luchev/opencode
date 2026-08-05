@@ -3,6 +3,11 @@ import { TimelineRow } from "./timeline-row"
 type ContextRow = Extract<TimelineRow.TimelineRow, { _tag: "AssistantPart" }>
 type PriorContext = { index: number; row: ContextRow }
 
+export function appendTurnExtensions(rows: TimelineRow.TimelineRow[], extensions: TimelineRow.TimelineRow[]) {
+  rows.push(...extensions)
+  return rows
+}
+
 export function reuseTimelineRows(previous: TimelineRow.TimelineRow[] | undefined, rows: TimelineRow.TimelineRow[]) {
   if (!previous?.length) return rows
   const byKey = new Map(previous.map((row) => [TimelineRow.key(row), row] as const))

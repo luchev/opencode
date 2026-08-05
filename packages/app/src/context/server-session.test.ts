@@ -223,6 +223,47 @@ describe("server session", () => {
     expect(ctx.store.lineage.peek("child")).toEqual(result)
   })
 
+  test("applies moved session locations without evicting cached state", () => {
+    const current = { ...session("child"), directory: "/repo/worktree", path: undefined }
+    const ctx = setup({ child: current })
+    ctx.store.remember(current)
+
+    ctx.store.apply({
+      type: "session.next.moved",
+      properties: {
+        sessionID: "child",
+        location: { directory: "/repo" },
+        subdirectory: "packages/app",
+      },
+    })
+
+    expect(ctx.store.get("child")).toMatchObject({ directory: "/repo", path: "packages/app" })
+  })
+
+  test("does not reuse a hung signal-scoped placement refresh", async () => {
+    let calls = 0
+    const client = {
+      session: {
+        get: async () => {
+          calls++
+          if (calls === 1) return new Promise<never>(() => {})
+          return { data: { ...session("child"), directory: "/destination" } }
+        },
+      },
+    } as unknown as OpencodeClient
+    const store = createServerSession(client)
+    store.remember({ ...session("child"), directory: "/source" })
+    const first = new AbortController()
+
+    void store.resolve("child", { force: true, signal: first.signal })
+    first.abort()
+    const result = await store.resolve("child", { force: true, signal: new AbortController().signal })
+
+    expect(calls).toBe(2)
+    expect(result.directory).toBe("/destination")
+    expect(store.get("child")?.directory).toBe("/destination")
+  })
+
   test("loads session content through the server client", async () => {
     const ctx = setup({ root: session("root") })
 
@@ -341,6 +382,17 @@ describe("server session", () => {
 
     store.apply({ type: "message.removed", properties: { sessionID: "root", messageID: next.id } })
     expect(store.data.session_message.root.map((message) => message.id)).toEqual([user.id, assistant.id])
+  })
+
+  test("indexes optimistic users for the current timeline projection", () => {
+    const ctx = setup({})
+    const message = userMessage("message-optimistic")
+
+    ctx.store.optimistic.add({ sessionID: "child", message, parts: [] })
+
+    expect(ctx.store.data.session_message.child.map((item) => item.id)).toEqual([message.id])
+    ctx.store.optimistic.remove({ sessionID: "child", messageID: message.id })
+    expect(ctx.store.data.session_message.child).toEqual([])
   })
 
   test("backfills an assistant-only initial page through its user root", async () => {
