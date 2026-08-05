@@ -39,6 +39,7 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
     [
+      [Bus.node, Bus.configured({ persist: true })],
       [Project.node, projects],
       [SessionExecution.node, SessionExecution.noopLayer],
     ],
@@ -537,7 +538,10 @@ describe("Session.create", () => {
       const targetDatabase = Database.layer({ path: path.join(tmp.path, "target.sqlite") })
       const targetLayer = AppNodeBuilder.build(
         LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node]),
-        [[Database.node, targetDatabase]],
+        [
+          [Database.node, targetDatabase],
+          [Bus.node, Bus.configured({ persist: true })],
+        ],
       )
 
       yield* Effect.gen(function* () {
