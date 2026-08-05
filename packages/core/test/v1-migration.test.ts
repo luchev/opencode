@@ -6,9 +6,12 @@ import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { V1Migration } from "@opencode-ai/core/database/v1-migration"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { SessionTable } from "@opencode-ai/core/session/sql"
 import { Project } from "@opencode-ai/core/project"
+import { ProjectTable } from "@opencode-ai/core/project/sql"
+import { AbsolutePath } from "@opencode-ai/core/schema"
 import { Effect, Logger, Schema } from "effect"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import type { SqlClient } from "effect/unstable/sql/SqlClient"
 import { tmpdir } from "./fixture/tmpdir"
 import path from "path"
@@ -815,12 +818,12 @@ describe("V1Migration database workflow", () => {
         time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL
       );
       INSERT INTO project VALUES (
-        'next-project', '/tmp/next', 'git', 'Source project', NULL, NULL, NULL, 1, 2, NULL, '[]', NULL
+        'next-project', 'C:/Users/sewer', 'git', 'Source project', NULL, NULL, NULL, 1, 2, NULL, '[]', NULL
       );
       INSERT INTO session (
         id, project_id, slug, directory, title, version, agent, model, time_created, time_updated
       ) VALUES
-        ('ses_next', 'next-project', 'next', '/tmp/next', 'Imported', '2', 'build',
+        ('ses_next', 'next-project', 'next', 'C:/Users/sewer', 'Imported', '2', 'build',
           '{"id":"model","providerID":"provider"}', 10, 20),
         ('ses_existing', 'next-project', 'source-existing', '/tmp/next', 'Source existing', '2', NULL, NULL, 11, 21);
       INSERT INTO session_message VALUES
@@ -861,6 +864,13 @@ describe("V1Migration database workflow", () => {
           agent: "build",
           model: '{"id":"model","providerID":"provider"}',
         })
+        expect(
+          yield* db
+            .select({ directory: SessionTable.directory })
+            .from(SessionTable)
+            .where(eq(SessionTable.id, SessionSchema.ID.make("ses_next")))
+            .get(),
+        ).toEqual({ directory: process.platform === "win32" ? "C:\\Users\\sewer" : "C:/Users/sewer" })
         expect(yield* db.all(sql`SELECT id, seq, data FROM session_message WHERE session_id = 'ses_next'`)).toEqual([
           {
             id: "msg_next",
@@ -881,6 +891,16 @@ describe("V1Migration database workflow", () => {
         expect(yield* db.get(sql`SELECT name, worktree FROM project WHERE id = 'next-project'`)).toEqual({
           name: "Current project",
           worktree: "/tmp/current",
+        })
+        yield* db.run(sql`UPDATE project SET worktree = 'C:/Users/sewer' WHERE id = 'next-project'`)
+        expect(
+          yield* db
+            .select({ worktree: ProjectTable.worktree })
+            .from(ProjectTable)
+            .where(eq(ProjectTable.id, Project.ID.make("next-project")))
+            .get(),
+        ).toEqual({
+          worktree: AbsolutePath.make(process.platform === "win32" ? "C:\\Users\\sewer" : "C:/Users/sewer"),
         })
         expect(yield* db.get(sql`SELECT value FROM kv WHERE key = 'migration.v1-v2.completed'`)).toEqual({
           value: "true",
@@ -1036,9 +1056,7 @@ describe("V1Migration database workflow", () => {
           seq: 7,
           owner_id: "owner",
         })
-        expect(yield* db.all(sql`SELECT id FROM event WHERE aggregate_id = 'ses_b'`)).toEqual([
-          { id: "event_stale_b" },
-        ])
+        expect(yield* db.all(sql`SELECT id FROM event WHERE aggregate_id = 'ses_b'`)).toEqual([{ id: "event_stale_b" }])
         expect(yield* db.get(sql`SELECT value FROM kv WHERE key = 'migration.v1-v2.completed'`)).toBeUndefined()
         yield* db.run(sql`DROP TRIGGER fail_b`)
         expect(yield* V1Migration.run()).toEqual({ status: "completed" })
