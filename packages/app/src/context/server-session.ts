@@ -22,6 +22,7 @@ import { normalizeSessionMessages } from "@/utils/session-message"
 import { dropSessionCaches, pickSessionCacheEvictions, SESSION_CACHE_LIMIT } from "./global-sync/session-cache"
 import { createV2SessionReducer, type V2SessionReduction } from "./server-session-v2-reducer"
 import type { ServerApi } from "@/utils/server"
+import type { DecodedLegacyMessagePage } from "./session-message-decode"
 
 type MessageApi = ServerApi["message"]
 
@@ -29,9 +30,15 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const cmpMessage = (a: Message, b: Message) => a.time.created - b.time.created || cmp(a.id, b.id)
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const initialMessagePageSize = 20
-const historyMessagePageSize = 200
+const historyMessagePageSize = 50
 const sessionInfoLimit = 2_048
 const emptyIDs: ReadonlySet<string> = new Set()
+
+function yieldToMain() {
+  const scheduler = (globalThis as { scheduler?: { yield: () => Promise<void> } }).scheduler
+  if (scheduler) return scheduler.yield()
+  return new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
 
 function needsOlderTurnRoot(source: readonly SessionMessageInfo[]) {
   const boundary = source.find(
@@ -183,7 +190,11 @@ function reconcileFetched<T extends { id: string }>(
   return [...result.values()].sort((a, b) => cmp(a.id, b.id))
 }
 
-type ServerSessionOptions = { retry?: typeof retry; protocol?: Promise<"v1" | "v2"> }
+type ServerSessionOptions = {
+  retry?: typeof retry
+  protocol?: Promise<"v1" | "v2">
+  decodeMessages?: (buffer: ArrayBuffer) => Promise<DecodedLegacyMessagePage>
+}
 
 export function createServerSession(
   client: OpencodeClient,
@@ -554,6 +565,7 @@ export function createServerSession(
         if (!response.data.length) break
       }
       const response = pages.at(-1)!
+      await yieldToMain()
       const source = pages.flatMap((page) => page.data).toReversed()
       const normalized = normalizeSessionMessages(sessionID, source)
       return {
@@ -568,10 +580,21 @@ export function createServerSession(
         complete: response.data.length === 0,
       }
     }
-    const response = await (options?.retry ?? retry)(() => {
+    const response = await (options?.retry ?? retry)(async () => {
       onAttempt?.()
-      return client.session.messages({ sessionID, limit, before })
+      if (!options?.decodeMessages) return client.session.messages({ sessionID, limit, before })
+      const response = await client.session.messages({ sessionID, limit, before }, { parseAs: "arrayBuffer" })
+      if (!(response.data instanceof ArrayBuffer)) throw new Error("Session messages response is not an ArrayBuffer")
+      return { response, decoded: await options.decodeMessages(response.data) }
     })
+    await yieldToMain()
+    if ("decoded" in response)
+      return {
+        ...response.decoded,
+        sourceMode: before ? ("older" as const) : ("latest" as const),
+        cursor: response.response.response.headers.get("x-next-cursor") ?? undefined,
+        complete: !response.response.response.headers.get("x-next-cursor"),
+      }
     const items = (response.data ?? []).filter((item) => !!item?.info?.id)
     return {
       session: items.map((item) => cleanMessage(item.info)).sort((a, b) => cmp(a.id, b.id)),

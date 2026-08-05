@@ -1,62 +1,7 @@
 import * as i18n from "@solid-primitives/i18n"
 
 import { dict as desktopEn } from "./en"
-import { dict as desktopZh } from "./zh"
-import { dict as desktopZht } from "./zht"
-import { dict as desktopKo } from "./ko"
-import { dict as desktopDe } from "./de"
-import { dict as desktopEs } from "./es"
-import { dict as desktopFr } from "./fr"
-import { dict as desktopDa } from "./da"
-import { dict as desktopJa } from "./ja"
-import { dict as desktopPl } from "./pl"
-import { dict as desktopRu } from "./ru"
-import { dict as desktopUk } from "./uk"
-import { dict as desktopAr } from "./ar"
-import { dict as desktopNo } from "./no"
-import { dict as desktopBr } from "./br"
-import { dict as desktopBs } from "./bs"
-import { dict as desktopTr } from "./tr"
-import { dict as desktopHi } from "./hi"
-import { dict as desktopNl } from "./nl"
-import { dict as desktopId } from "./id"
-import { dict as desktopVi } from "./vi"
-import { dict as desktopIt } from "./it"
-import { dict as desktopUr } from "./ur"
-import { dict as desktopPa } from "./pa"
-import { dict as desktopAz } from "./az"
-import { dict as desktopFi } from "./fi"
-import { dict as desktopSv } from "./sv"
-import { dict as desktopTh } from "./th"
-
 import { dict as appEn } from "../../../../app/src/i18n/en"
-import { dict as appZh } from "../../../../app/src/i18n/zh"
-import { dict as appZht } from "../../../../app/src/i18n/zht"
-import { dict as appKo } from "../../../../app/src/i18n/ko"
-import { dict as appDe } from "../../../../app/src/i18n/de"
-import { dict as appEs } from "../../../../app/src/i18n/es"
-import { dict as appFr } from "../../../../app/src/i18n/fr"
-import { dict as appDa } from "../../../../app/src/i18n/da"
-import { dict as appJa } from "../../../../app/src/i18n/ja"
-import { dict as appPl } from "../../../../app/src/i18n/pl"
-import { dict as appRu } from "../../../../app/src/i18n/ru"
-import { dict as appUk } from "../../../../app/src/i18n/uk"
-import { dict as appAr } from "../../../../app/src/i18n/ar"
-import { dict as appNo } from "../../../../app/src/i18n/no"
-import { dict as appBr } from "../../../../app/src/i18n/br"
-import { dict as appBs } from "../../../../app/src/i18n/bs"
-import { dict as appTr } from "../../../../app/src/i18n/tr"
-import { dict as appHi } from "../../../../app/src/i18n/hi"
-import { dict as appNl } from "../../../../app/src/i18n/nl"
-import { dict as appId } from "../../../../app/src/i18n/id"
-import { dict as appVi } from "../../../../app/src/i18n/vi"
-import { dict as appIt } from "../../../../app/src/i18n/it"
-import { dict as appUr } from "../../../../app/src/i18n/ur"
-import { dict as appPa } from "../../../../app/src/i18n/pa"
-import { dict as appAz } from "../../../../app/src/i18n/az"
-import { dict as appFi } from "../../../../app/src/i18n/fi"
-import { dict as appSv } from "../../../../app/src/i18n/sv"
-import { dict as appTh } from "../../../../app/src/i18n/th"
 
 export type Locale =
   | "en"
@@ -217,35 +162,40 @@ function pickLocale(value: unknown): Locale | null {
 
 const base = i18n.flatten({ ...appEn, ...desktopEn })
 
-function build(locale: Locale): Dictionary {
+const loaders = {
+  zh: () => Promise.all([import("../../../../app/src/i18n/zh"), import("./zh")]),
+  zht: () => Promise.all([import("../../../../app/src/i18n/zht"), import("./zht")]),
+  ko: () => Promise.all([import("../../../../app/src/i18n/ko"), import("./ko")]),
+  de: () => Promise.all([import("../../../../app/src/i18n/de"), import("./de")]),
+  es: () => Promise.all([import("../../../../app/src/i18n/es"), import("./es")]),
+  fr: () => Promise.all([import("../../../../app/src/i18n/fr"), import("./fr")]),
+  da: () => Promise.all([import("../../../../app/src/i18n/da"), import("./da")]),
+  ja: () => Promise.all([import("../../../../app/src/i18n/ja"), import("./ja")]),
+  pl: () => Promise.all([import("../../../../app/src/i18n/pl"), import("./pl")]),
+  ru: () => Promise.all([import("../../../../app/src/i18n/ru"), import("./ru")]),
+  uk: () => Promise.all([import("../../../../app/src/i18n/uk"), import("./uk")]),
+  ar: () => Promise.all([import("../../../../app/src/i18n/ar"), import("./ar")]),
+  no: () => Promise.all([import("../../../../app/src/i18n/no"), import("./no")]),
+  br: () => Promise.all([import("../../../../app/src/i18n/br"), import("./br")]),
+  bs: () => Promise.all([import("../../../../app/src/i18n/bs"), import("./bs")]),
+  tr: () => Promise.all([import("../../../../app/src/i18n/tr"), import("./tr")]),
+  hi: () => Promise.all([import("../../../../app/src/i18n/hi"), import("./hi")]),
+  nl: () => Promise.all([import("../../../../app/src/i18n/nl"), import("./nl")]),
+  id: () => Promise.all([import("../../../../app/src/i18n/id"), import("./id")]),
+  vi: () => Promise.all([import("../../../../app/src/i18n/vi"), import("./vi")]),
+  it: () => Promise.all([import("../../../../app/src/i18n/it"), import("./it")]),
+  ur: () => Promise.all([import("../../../../app/src/i18n/ur"), import("./ur")]),
+  pa: () => Promise.all([import("../../../../app/src/i18n/pa"), import("./pa")]),
+  az: () => Promise.all([import("../../../../app/src/i18n/az"), import("./az")]),
+  fi: () => Promise.all([import("../../../../app/src/i18n/fi"), import("./fi")]),
+  sv: () => Promise.all([import("../../../../app/src/i18n/sv"), import("./sv")]),
+  th: () => Promise.all([import("../../../../app/src/i18n/th"), import("./th")]),
+}
+
+async function build(locale: Locale): Promise<Dictionary> {
   if (locale === "en") return base
-  if (locale === "zh") return { ...base, ...i18n.flatten(appZh), ...i18n.flatten(desktopZh) }
-  if (locale === "zht") return { ...base, ...i18n.flatten(appZht), ...i18n.flatten(desktopZht) }
-  if (locale === "de") return { ...base, ...i18n.flatten(appDe), ...i18n.flatten(desktopDe) }
-  if (locale === "es") return { ...base, ...i18n.flatten(appEs), ...i18n.flatten(desktopEs) }
-  if (locale === "fr") return { ...base, ...i18n.flatten(appFr), ...i18n.flatten(desktopFr) }
-  if (locale === "da") return { ...base, ...i18n.flatten(appDa), ...i18n.flatten(desktopDa) }
-  if (locale === "ja") return { ...base, ...i18n.flatten(appJa), ...i18n.flatten(desktopJa) }
-  if (locale === "pl") return { ...base, ...i18n.flatten(appPl), ...i18n.flatten(desktopPl) }
-  if (locale === "ru") return { ...base, ...i18n.flatten(appRu), ...i18n.flatten(desktopRu) }
-  if (locale === "uk") return { ...base, ...i18n.flatten(appUk), ...i18n.flatten(desktopUk) }
-  if (locale === "ar") return { ...base, ...i18n.flatten(appAr), ...i18n.flatten(desktopAr) }
-  if (locale === "no") return { ...base, ...i18n.flatten(appNo), ...i18n.flatten(desktopNo) }
-  if (locale === "br") return { ...base, ...i18n.flatten(appBr), ...i18n.flatten(desktopBr) }
-  if (locale === "bs") return { ...base, ...i18n.flatten(appBs), ...i18n.flatten(desktopBs) }
-  if (locale === "tr") return { ...base, ...i18n.flatten(appTr), ...i18n.flatten(desktopTr) }
-  if (locale === "hi") return { ...base, ...i18n.flatten(appHi), ...i18n.flatten(desktopHi) }
-  if (locale === "nl") return { ...base, ...i18n.flatten(appNl), ...i18n.flatten(desktopNl) }
-  if (locale === "id") return { ...base, ...i18n.flatten(appId), ...i18n.flatten(desktopId) }
-  if (locale === "vi") return { ...base, ...i18n.flatten(appVi), ...i18n.flatten(desktopVi) }
-  if (locale === "it") return { ...base, ...i18n.flatten(appIt), ...i18n.flatten(desktopIt) }
-  if (locale === "ur") return { ...base, ...i18n.flatten(appUr), ...i18n.flatten(desktopUr) }
-  if (locale === "pa") return { ...base, ...i18n.flatten(appPa), ...i18n.flatten(desktopPa) }
-  if (locale === "az") return { ...base, ...i18n.flatten(appAz), ...i18n.flatten(desktopAz) }
-  if (locale === "fi") return { ...base, ...i18n.flatten(appFi), ...i18n.flatten(desktopFi) }
-  if (locale === "sv") return { ...base, ...i18n.flatten(appSv), ...i18n.flatten(desktopSv) }
-  if (locale === "th") return { ...base, ...i18n.flatten(appTh), ...i18n.flatten(desktopTh) }
-  return { ...base, ...i18n.flatten(appKo), ...i18n.flatten(desktopKo) }
+  const dictionaries = await loaders[locale]()
+  return { ...base, ...i18n.flatten(dictionaries[0].dict), ...i18n.flatten(dictionaries[1].dict) }
 }
 
 const state = {
@@ -253,8 +203,6 @@ const state = {
   dict: base as Dictionary,
   init: undefined as Promise<Locale> | undefined,
 }
-
-state.dict = build(state.locale)
 
 const translate = i18n.translator(() => state.dict, i18n.resolveTemplate)
 
@@ -272,7 +220,7 @@ export function initI18n(): Promise<Locale> {
     const next = pickLocale(value) ?? state.locale
 
     state.locale = next
-    state.dict = build(next)
+    state.dict = await build(next)
     return next
   })().catch(() => state.locale)
 
